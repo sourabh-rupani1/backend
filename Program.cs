@@ -10,69 +10,84 @@ using MongoDB.Driver;
 
 var builder = WebApplication.CreateBuilder(args);
 
-//builder.Services.AddSingleton<IMongoClient>(sp =>
-//{
-//    var settings = sp.GetRequiredService<IOptions<MongoDBSettings>>().Value;
-//    return new MongoClient(settings.ConnectionString);
-//});
-// Add MongoDB client configuration
+// Bind MongoDB settings from appsettings.json and allow environment variable overrides
+builder.Services.Configure<MongoDBSettings>(builder.Configuration.GetSection("MongoDBSettings"));
+builder.Services.AddSingleton<IMongoDBSettings>(sp =>
+{
+    var config = sp.GetRequiredService<IOptions<MongoDBSettings>>().Value;
+    config.ConnectionString = Environment.GetEnvironmentVariable("MONGODB_CONNECTION_STRING") ?? config.ConnectionString;
+    config.DatabaseName = Environment.GetEnvironmentVariable("MONGODB_DATABASE") ?? config.DatabaseName;
+    return config;
+});
+
+// Register MongoClient as a singleton
 builder.Services.AddSingleton<IMongoClient>(sp =>
 {
-    // Fetch the connection string from the environment variable
-    var mongoConnectionString = Environment.GetEnvironmentVariable("MONGO_URL")
-                                ?? throw new Exception("MONGO_URL environment variable not set.");
-    return new MongoClient(mongoConnectionString);
+    var settings = sp.GetRequiredService<IMongoDBSettings>();
+    return new MongoClient(settings.ConnectionString);
 });
 
-// Add services to the container.
-builder.Services.Configure<MongoDBSettings>(options =>
+// Register IMongoDatabase
+builder.Services.AddSingleton<IMongoDatabase>(sp =>
 {
-    options.ConnectionString = Environment.GetEnvironmentVariable("MONGO_URL");
-    options.DatabaseName = Environment.GetEnvironmentVariable("MONGODB_DATABASE_NAME")
-                           ?? "defaultDatabaseName"; // Replace with a fallback name or remove as needed
+    var mongoClient = sp.GetRequiredService<IMongoClient>();
+    var settings = sp.GetRequiredService<IMongoDBSettings>();
+    return mongoClient.GetDatabase(settings.DatabaseName);
 });
 
-//builder.Services.Configure<MongoDBSettings>(options =>
-//{
-//    options.ConnectionString = Environment.GetEnvironmentVariable("MONGODB_CONNECTION_STRING");
-//    options.DatabaseName = Environment.GetEnvironmentVariable("MONGODB_DATABASE_NAME");
-//}); 
+// Register Swagger services
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "Construction Management API",
+        Version = "v1"
+    });
+});
 
-
-builder.Services.AddSingleton<IMongoDBSettings>(sp =>
-    sp.GetRequiredService<IOptions<MongoDBSettings>>().Value);
-builder.Services.AddSingleton<RoleSeeder>();
-
-
-builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+// Register other services
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
-
+builder.Services.AddSingleton<RoleSeeder>();
+builder.Services.AddAuthorization();
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
 
 var app = builder.Build();
+
+app.UseCors("AllowAll");
+
+// Enable Swagger UI in development and production environments
+if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Construction Management API V1");
+    });
+}
 
 // Seed roles when the app starts
 using (var scope = app.Services.CreateScope())
 {
     var roleSeeder = scope.ServiceProvider.GetRequiredService<RoleSeeder>();
-    await roleSeeder.SeedRolesAsync(); // This will seed the roles into the MongoDB database
+    await roleSeeder.SeedRolesAsync();
 }
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
+// Configure the HTTP request pipeline
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
 
-app.Run();
+// Configure to listen on Railway-assigned PORT or default to 3000
+var port = Environment.GetEnvironmentVariable("PORT") ?? "3000";
+app.Run($"http://0.0.0.0:{port}");
