@@ -1,0 +1,62 @@
+# Ignore Visual Studio temporary files, build results, and
+# .NET files
+.vs/
+obj/
+bin/
+
+# User-specific files
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+
+# Auto-generated files by Visual Studio
+Generated\ Files/
+
+# Build results
+*.dll
+*.exe
+*.app
+*.so
+*.dylib
+*.pdb
+*.cache
+*.ilk
+*.log
+*.lib
+*.ldf
+*.ndb
+*.ds_store
+*.obj
+*.pyc
+*.pyo
+*.log
+*.vsix
+*.nupkg
+*.nuspec
+*.psess
+*.vspx
+
+# Microsoft Azure Web App publish folder
+.publish/
+
+# Other
+project.lock.json
+project.fragment.lock.json
+artifacts/
+*.local.settings.json
+
+# Rider-specific files
+.idea/
+
+# macOS specific files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbs.db (Windows thumbnail cache)
+Thumbs.db
+ehthumbs.db
+
+# node_modules (if using Node.js in your project)
+node_modules/
